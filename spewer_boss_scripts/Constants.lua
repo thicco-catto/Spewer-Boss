@@ -16,4 +16,7 @@ Constants.SPEWER_BOSS_JUMP_VELOCITY = 4
 Constants.RAINING_PROJECTILES_AREA = 155/2
 Constants.RAINING_PROJECTILES_FRAMES = 40
 
+--White attack
+Constants.WHITE_ATTACK_DURATION = 40
+
 return Constants

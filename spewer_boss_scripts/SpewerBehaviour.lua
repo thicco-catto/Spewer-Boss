@@ -29,6 +29,26 @@ local function GetSpewerPillAnimFromNumber(currentForm, num)
 end
 
 
+---@param pos Vector
+---@return EntityPlayer
+local function GetClosestPlayer(pos)
+    local minDistance = math.maxinteger
+    local closestPlayer = nil
+
+    for i = 0, game:GetNumPlayers() - 1, 1 do
+        local player = game:GetPlayer(i)
+        local distance = pos:DistanceSquared(player.Position)
+
+        if distance < minDistance then
+            minDistance = distance
+            closestPlayer = player
+        end
+    end
+
+    return closestPlayer
+end
+
+
 ---@param spewer EntityNPC
 function SpewerBehaviour:OnSpewerInit(spewer)
     spewer:GetSprite():Play("Appear", true)
@@ -44,7 +64,8 @@ local function OnSpewerAppear(spewer, spewerSprite, spewerData)
 
     spewer.State = NpcState.STATE_IDLE
     spewerSprite:Play("Idle", true)
-    spewerData.JumpCountDown = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
+    spewer.StateFrame = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
+    spewerData.JumpsLeft = 1
 end
 
 
@@ -52,45 +73,33 @@ end
 ---@param spewerSprite Sprite
 ---@param spewerData table
 local function OnSpewerIdle(spewer, spewerSprite, spewerData)
-    if spewerData.JumpCountDown > 0 then
-        spewerData.JumpCountDown = spewerData.JumpCountDown - 1
+    if spewer.StateFrame > 0 then
+        spewer.StateFrame = spewer.StateFrame - 1
         return
     end
 
-    --Find closest player to jump towards
-    local minDistance = math.maxinteger
-    local closestPlayer = nil
+    if spewerData.JumpsLeft > 0 then
+        spewerData.JumpsLeft = spewerData.JumpsLeft - 1
+        local closestPlayer = GetClosestPlayer(spewer.Position)
 
-    for i = 0, game:GetNumPlayers() - 1, 1 do
-        local player = game:GetPlayer(i)
-        local distance = spewer.Position:DistanceSquared(player.Position)
+        spewer.V2 = (closestPlayer.Position - spewer.Position):Normalized()
+        spewer.State = NpcState.STATE_MOVE
+        spewerSprite:Play("Jump", true)
+    elseif spewer.I1 == 3 then
+        local rng = spewer:GetDropRNG()
+        local chosenPill = rng:RandomInt(2)
 
-        if distance < minDistance then
-            minDistance = distance
-            closestPlayer = player
-        end
+        local pillAnim = GetSpewerPillAnimFromNumber(spewerData.SpewerForm, chosenPill)
+        spewerSprite:Play(pillAnim, true)
+
+        spewer.I1 = 0
+        spewer.State = NpcState.STATE_SPECIAL
+    else
+        spewer.I1 = spewer.I1 + 1
+        spewer.State = NpcState.STATE_ATTACK
+
+        spewerSprite:Play("Spit", true)
     end
-
-    spewer.State = NpcState.STATE_ATTACK
-    spewerSprite:Play("Spit", true)
-
-    -- local rng = spewer:GetDropRNG()
-    -- local chosenAttack = rng:RandomInt(3)
-
-    -- if chosenAttack == 0 then
-    --     spewerData.V1 = (closestPlayer.Position - spewer.Position):Normalized()
-    --     spewer.State = NpcState.STATE_MOVE
-    --     spewerSprite:Play("Jump", true)
-    -- elseif chosenAttack == 1 then
-    --     spewer.State = NpcState.STATE_ATTACK
-    --     spewerSprite:Play("Spit", true)
-    -- elseif chosenAttack == 2 then
-    --     spewer.State = NpcState.STATE_SPECIAL
-
-    --     local chosenForm = rng:RandomInt(2)
-    --     local animation = GetSpewerPillAnimFromNumber(spewerData.SpewerForm, chosenForm)
-    --     spewerSprite:Play(animation, true)
-    -- end
 end
 
 
@@ -118,7 +127,7 @@ local function OnSpewerJump(spewer, spewerSprite, spewerData)
     if spewerSprite:IsFinished("JumpLand") then
         spewer.State = NpcState.STATE_IDLE
         spewerSprite:Play("Idle", true)
-        spewerData.JumpCountDown = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
+        spewer.StateFrame = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
 
         spewer.Velocity = Vector.Zero
 
@@ -126,23 +135,12 @@ local function OnSpewerJump(spewer, spewerSprite, spewerData)
     end
 
     ---@diagnostic disable-next-line: assign-type-mismatch
-    spewer.Velocity = spewerData.V1 * Constants.SPEWER_BOSS_JUMP_VELOCITY
+    spewer.Velocity = spewer.V2 * Constants.SPEWER_BOSS_JUMP_VELOCITY
 end
 
 
 local function ShootGreenProjectile(spewer)
-    local minDistance = math.maxinteger
-    local closestPlayer = nil
-
-    for i = 0, game:GetNumPlayers() - 1, 1 do
-        local player = game:GetPlayer(i)
-        local distance = spewer.Position:DistanceSquared(player.Position)
-
-        if distance < minDistance then
-            minDistance = distance
-            closestPlayer = player
-        end
-    end
+    local closestPlayer = GetClosestPlayer(spewer.Position)
 
     local params = ProjectileParams()
 
@@ -158,6 +156,52 @@ local function ShootGreenProjectile(spewer)
 end
 
 
+local function ShootBigRedProjectile(spewer)
+    local closestPlayer = GetClosestPlayer(spewer.Position)
+
+    local params = ProjectileParams()
+
+    params.BulletFlags = ProjectileFlags.RED_CREEP | ProjectileFlags.ACID_RED
+    params.Scale = 2.5
+
+    local velocity = (closestPlayer.Position - spewer.Position):Normalized() * 8
+    spewer:FireProjectiles(spewer.Position, velocity, 0, params)
+end
+
+
+---@param spewer EntityNPC
+local function ShootWhiteVomitProjectiles(spewer)
+    local closestPlayer = GetClosestPlayer(spewer.Position)
+
+    local params = ProjectileParams()
+
+    local projectileSeed = spewer:GetDropRNG():Next()
+    local rng = RNG()
+    rng:SetSeed(projectileSeed, 35)
+
+    params.Scale = 1 + (rng:RandomFloat() * 0.8 - 0.4)
+    params.Color = Color(1, 1, 1, 1, 1, 1, 1)
+    --For lobbed shots
+    params.FallingAccelModifier = 0.7 + (rng:RandomFloat() * 0.2 - 0.1)
+    params.FallingSpeedModifier = -10 + (rng:RandomFloat() * 2 - 1)
+
+    local randomDirection = Vector(rng:RandomFloat() * 2 - 1, rng:RandomFloat() * 2 - 1)
+    local randomDirection2 = Vector(rng:RandomFloat() * 2 - 1, rng:RandomFloat() * 2 - 1)
+
+    ---@type Vector
+    ---@diagnostic disable-next-line: assign-type-mismatch
+    local targetPosition = closestPlayer.Position + randomDirection * 40
+
+    ---@type Vector
+    ---@diagnostic disable-next-line: assign-type-mismatch
+    local spawningPos = spewer.Position + Vector(0, 10) + randomDirection2 * 20
+
+    local velocity = (targetPosition - spawningPos):Normalized() * 8
+    spewer:FireProjectiles(spawningPos, velocity, 0, params)
+
+end
+
+
 ---@param spewer EntityNPC
 ---@param spewerSprite Sprite
 ---@param spewerData table
@@ -165,12 +209,33 @@ local function OnSpewerAttack(spewer, spewerSprite, spewerData)
     if spewerSprite:IsFinished("Spit") then
         spewer.State = NpcState.STATE_IDLE
         spewerSprite:Play("Idle", true)
-        spewerData.JumpCountDown = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
+        spewer.StateFrame = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
+
+        if spewerData.SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
+            spewerData.JumpsLeft = 2
+        else
+            spewerData.JumpsLeft = 1
+        end
     end
 
     if spewerSprite:IsEventTriggered("Shoot") then
         if spewerData.SpewerForm == Constants.SPEWER_BOSS_FORMS.DEFAULT then
             ShootGreenProjectile(spewer)
+        elseif spewerData.SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
+            ShootBigRedProjectile(spewer)
+        else
+            spewerSprite:Play("SpitLoop", true)
+            spewer.I2 = Constants.WHITE_ATTACK_DURATION
+        end
+    end
+
+    if spewerSprite:IsPlaying("SpitLoop") then
+        ShootWhiteVomitProjectiles(spewer)
+
+        spewer.I2 = spewer.I2 - 1
+
+        if spewer.I2 == 0 then
+            spewerSprite:SetFrame("Spit", 18)
         end
     end
 end
@@ -197,7 +262,13 @@ local function OnSpewerPill(spewer, spewerSprite, spewerData)
     if spewerSprite:IsFinished("Appear") then
         spewerSprite:Play("Idle")
         spewer.State = NpcState.STATE_IDLE
-        spewerData.JumpCountDown = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
+        spewer.StateFrame = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
+
+        if spewerData.Form == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
+            spewerData.JumpsLeft = 2
+        else
+            spewerData.JumpsLeft = 1
+        end
     end
 end
 
@@ -231,11 +302,43 @@ end
 
 ---@param projectile EntityProjectile
 function SpewerBehaviour:OnProjectileRemoved(projectile)
+    if projectile:GetData().IsRedSpewerSplitProjectile then
+        local closestPlayer = GetClosestPlayer(projectile.Position)
+        local projectileSpeed = (closestPlayer.Position - projectile.Position):Normalized() * 10
+
+        local leperProjectile = Isaac.Spawn(EntityType.ENTITY_PROJECTILE, 0, 0, projectile.Position, projectileSpeed, nil)
+        leperProjectile = leperProjectile:ToProjectile()
+
+        leperProjectile.Color = Color(1, 1, 1, 1, 0.3, 0, 0)
+        leperProjectile:AddProjectileFlags(ProjectileFlags.RED_CREEP)
+    end
+
     if projectile.SpawnerType ~= Constants.SPEWER_BOSS_TYPE then return end
 
     local data = projectile:GetData()
     if data.SpewerForm == Constants.SPEWER_BOSS_FORMS.DEFAULT then
         table.insert(rainingProjectilesPositions, {center = projectile.Position, frames = Constants.RAINING_PROJECTILES_FRAMES, rng = projectile:GetDropRNG()})
+    elseif data.SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
+        for x = -1, 1, 1 do
+            for y = -1, 1, 1 do
+                if x ~= 0 and y ~= 0 then
+                    local projectileDirection = Vector(x, y)
+                    local projectileSpeed = projectileDirection * 4
+
+                    local splitProjectile = Isaac.Spawn(EntityType.ENTITY_PROJECTILE, 0, 0, projectile.Position, projectileSpeed, nil)
+                    splitProjectile = splitProjectile:ToProjectile()
+                    splitProjectile:AddScale(1.3)
+                    splitProjectile:GetData().IsRedSpewerSplitProjectile = true
+
+                    splitProjectile:AddFallingAccel(1)
+                    splitProjectile:AddFallingSpeed(-10)
+                end
+            end
+        end
+    elseif data.SpewerForm == Constants.SPEWER_BOSS_FORMS.WHITE_PILLED then
+        if projectile:GetDropRNG():RandomInt(100) < 75 then
+            Isaac.Spawn(EntityType.ENTITY_EFFECT, EffectVariant.CREEP_WHITE, 0, projectile.Position, Vector.Zero, nil)
+        end
     end
 end
 

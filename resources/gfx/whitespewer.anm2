@@ -1,5 +1,5 @@
 <AnimatedActor>
-	<Info CreatedBy="Unknown" CreatedOn="21/08/2022 20:54:00" Version="18" Fps="60"/>
+	<Info CreatedBy="Unknown" CreatedOn="22/08/2022 12:49:02" Version="20" Fps="60"/>
 	<Content>
 		<Spritesheets>
 			<Spritesheet Path="bosses\spewerwhite.png" Id="0"/>
@@ -18,7 +18,9 @@
 			<Layer Name="greensmear" Id="5" SpritesheetId="5"/>
 		</Layers>
 		<Nulls/>
-		<Events/>
+		<Events>
+			<Event Name="Shoot" Id="0"/>
+		</Events>
 	</Content>
 	<Animations DefaultAnimation="spit">
 		<Animation Name="Spit" FrameNum="23" Loop="false">
@@ -58,7 +60,9 @@
 				<LayerAnimation LayerId="4" Visible="true"/>
 			</LayerAnimations>
 			<NullAnimations/>
-			<Triggers/>
+			<Triggers>
+				<Trigger EventId="0" AtFrame="14"/>
+			</Triggers>
 		</Animation>
 		<Animation Name="Idle" FrameNum="8" Loop="true">
 			<RootAnimation>
@@ -411,6 +415,23 @@
 				<LayerAnimation LayerId="2" Visible="true"/>
 				<LayerAnimation LayerId="3" Visible="true"/>
 				<LayerAnimation LayerId="4" Visible="true"/>
+			</LayerAnimations>
+			<NullAnimations/>
+			<Triggers/>
+		</Animation>
+		<Animation Name="SpitLoop" FrameNum="1" Loop="true">
+			<RootAnimation>
+				<Frame XPosition="0" YPosition="0" XScale="100" YScale="100" Delay="1" Visible="true" RedTint="255" GreenTint="255" BlueTint="255" AlphaTint="255" RedOffset="0" GreenOffset="0" BlueOffset="0" Rotation="0" Interpolated="false"/>
+			</RootAnimation>
+			<LayerAnimations>
+				<LayerAnimation LayerId="0" Visible="true">
+					<Frame XPosition="0" YPosition="0" XPivot="29" YPivot="45" XCrop="128" YCrop="0" Width="64" Height="60" XScale="100" YScale="100" Delay="1" Visible="true" RedTint="255" GreenTint="255" BlueTint="255" AlphaTint="255" RedOffset="0" GreenOffset="0" BlueOffset="0" Rotation="0" Interpolated="false"/>
+				</LayerAnimation>
+				<LayerAnimation LayerId="1" Visible="true"/>
+				<LayerAnimation LayerId="2" Visible="true"/>
+				<LayerAnimation LayerId="3" Visible="true"/>
+				<LayerAnimation LayerId="4" Visible="true"/>
+				<LayerAnimation LayerId="5" Visible="true"/>
 			</LayerAnimations>
 			<NullAnimations/>
 			<Triggers/>
