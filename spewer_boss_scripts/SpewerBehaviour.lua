@@ -297,7 +297,10 @@ function SpewerBehaviour:OnProjectileInit(projectile)
     if projectile.SpawnerType ~= Constants.SPEWER_BOSS_TYPE then return end
 
     projectile:GetData().SpewerForm = projectile.SpawnerEntity:GetData().SpewerForm
+end
 
+
+function SpewerBehaviour:OnProjectileUpdate(projectile)
     if projectile:GetData().SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
         projectile.FallingAccel = -0.1
         projectile.FallingSpeed = 0
@@ -396,6 +399,7 @@ function SpewerBehaviour:AddCallbacks(constants)
     Constants.MOD:AddCallback(ModCallbacks.MC_NPC_UPDATE, SpewerBehaviour.OnSpewerUpdate, Constants.SPEWER_BOSS_TYPE)
 
     Constants.MOD:AddCallback(ModCallbacks.MC_POST_PROJECTILE_INIT, SpewerBehaviour.OnProjectileInit)
+    Constants.MOD:AddCallback(ModCallbacks.MC_POST_PROJECTILE_UPDATE, SpewerBehaviour.OnProjectileUpdate)
     Constants.MOD:AddCallback(ModCallbacks.MC_POST_ENTITY_REMOVE, SpewerBehaviour.OnProjectileRemoved, EntityType.ENTITY_PROJECTILE)
 
     Constants.MOD:AddCallback(ModCallbacks.MC_POST_UPDATE, SpewerBehaviour.OnFrameUpdate)
