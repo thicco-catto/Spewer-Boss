@@ -297,6 +297,11 @@ function SpewerBehaviour:OnProjectileInit(projectile)
     if projectile.SpawnerType ~= Constants.SPEWER_BOSS_TYPE then return end
 
     projectile:GetData().SpewerForm = projectile.SpawnerEntity:GetData().SpewerForm
+
+    if projectile:GetData().SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
+        projectile.FallingAccel = -0.1
+        projectile.FallingSpeed = 0
+    end
 end
 
 
@@ -337,7 +342,10 @@ function SpewerBehaviour:OnProjectileRemoved(projectile)
         end
     elseif data.SpewerForm == Constants.SPEWER_BOSS_FORMS.WHITE_PILLED then
         if projectile:GetDropRNG():RandomInt(100) < 75 then
-            Isaac.Spawn(EntityType.ENTITY_EFFECT, EffectVariant.CREEP_WHITE, 0, projectile.Position, Vector.Zero, nil)
+            local whiteCreep = Isaac.Spawn(EntityType.ENTITY_EFFECT, EffectVariant.CREEP_WHITE, 0, projectile.Position, Vector.Zero, nil)
+            whiteCreep = whiteCreep:ToEffect()
+
+            whiteCreep.Timeout = whiteCreep.Timeout * 2
         end
     end
 end
