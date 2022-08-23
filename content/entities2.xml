@@ -1,5 +1,5 @@
 <entities anm2root="gfx/" version="5">
-    <entity anm2path="spewer.anm2" baseHP="250" boss="1" bossID="1" champion="0" collisionDamage="1" collisionMass="500" collisionRadius="40" friction="1" id="839" name="Spewer" numGridCollisionPoints="12" shadowSize="56" stageHP="0" variant="0" portrait="2">
+    <entity anm2path="spewer.anm2" baseHP="250" boss="1" bossID="1" champion="0" collisionDamage="1" collisionMass="750" collisionRadius="40" friction="1" id="839" name="Spewer" numGridCollisionPoints="12" shadowSize="56" stageHP="0" variant="0" portrait="2">
         <gibs amount="18" blood="1" bone="0" eye="1" gut="1" large="1" />
     </entity>
 </entities>

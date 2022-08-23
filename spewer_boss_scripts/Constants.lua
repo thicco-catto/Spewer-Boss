@@ -18,5 +18,6 @@ Constants.RAINING_PROJECTILES_FRAMES = 40
 
 --White attack
 Constants.WHITE_ATTACK_DURATION = 40
+Constants.WHITE_ATTACK_SPIDER_CHANCE = 5
 
 return Constants

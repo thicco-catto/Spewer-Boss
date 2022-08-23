@@ -49,10 +49,19 @@ local function GetClosestPlayer(pos)
 end
 
 
+---@param rng RNG
+---@return Vector
+local function GetRandomDirection(rng)
+    return Vector(rng:RandomFloat() * 2 - 1, rng:RandomFloat() * 2 - 1)
+end
+
+
 ---@param spewer EntityNPC
 function SpewerBehaviour:OnSpewerInit(spewer)
     spewer:GetSprite():Play("Appear", true)
     spewer:GetData().SpewerForm = Constants.SPEWER_BOSS_FORMS.DEFAULT
+
+    spewer:AddEntityFlags(EntityFlag.FLAG_NO_KNOCKBACK | EntityFlag.FLAG_NO_PHYSICS_KNOCKBACK)
 end
 
 
@@ -78,12 +87,16 @@ local function OnSpewerIdle(spewer, spewerSprite, spewerData)
         return
     end
 
+    local closestPlayer = GetClosestPlayer(spewer.Position)
+
+    spewer.FlipX = spewer.Position.X < closestPlayer.Position.X
+
     if spewerData.JumpsLeft > 0 then
         spewerData.JumpsLeft = spewerData.JumpsLeft - 1
-        local closestPlayer = GetClosestPlayer(spewer.Position)
 
         spewer.V2 = (closestPlayer.Position - spewer.Position):Normalized()
         spewer.State = NpcState.STATE_MOVE
+        spewer.EntityCollisionClass = EntityCollisionClass.ENTCOLL_NONE
         spewerSprite:Play("Jump", true)
     elseif spewer.I1 == 3 then
         local rng = spewer:GetDropRNG()
@@ -116,6 +129,7 @@ local function OnSpewerJump(spewer, spewerSprite, spewerData)
     end
 
     if spewerSprite:IsFinished("JumpDown") then
+        spewer.EntityCollisionClass = EntityCollisionClass.ENTCOLL_ALL
         spewerSprite:Play("JumpLand")
     end
 
@@ -150,9 +164,25 @@ local function ShootGreenProjectile(spewer)
     --For lobbed shots
     params.FallingAccelModifier = 0.7
     params.FallingSpeedModifier = -10
+    params.Scale = 2
 
     local velocity = (closestPlayer.Position - spewer.Position):Normalized() * 8
     spewer:FireProjectiles(spewer.Position, velocity, 0, params)
+
+    --Shoot another 2 random projectiles
+    for _ = 1, 2, 1 do
+        local randomDirection = GetRandomDirection(spewer:GetDropRNG())
+
+        local randomProjectile = Isaac.Spawn(EntityType.ENTITY_PROJECTILE, ProjectileVariant.PROJECTILE_TEAR, 0, spewer.Position, randomDirection * 8, spewer)
+        randomProjectile = randomProjectile:ToProjectile()
+
+        randomProjectile:AddProjectileFlags(ProjectileFlags.EXPLODE)
+        randomProjectile.Color = Color(0.5, 0.9, 0.4)
+        randomProjectile.FallingAccel = 0.7
+        randomProjectile.FallingSpeed = -10
+
+        randomProjectile:GetData().IsRandomGreenSpewerProjectile = true
+    end
 end
 
 
@@ -173,6 +203,8 @@ end
 local function ShootWhiteVomitProjectiles(spewer)
     local closestPlayer = GetClosestPlayer(spewer.Position)
 
+    spewer.FlipX = spewer.Position.X < closestPlayer.Position.X
+
     local params = ProjectileParams()
 
     local projectileSeed = spewer:GetDropRNG():Next()
@@ -185,8 +217,8 @@ local function ShootWhiteVomitProjectiles(spewer)
     params.FallingAccelModifier = 0.7 + (rng:RandomFloat() * 0.2 - 0.1)
     params.FallingSpeedModifier = -10 + (rng:RandomFloat() * 2 - 1)
 
-    local randomDirection = Vector(rng:RandomFloat() * 2 - 1, rng:RandomFloat() * 2 - 1)
-    local randomDirection2 = Vector(rng:RandomFloat() * 2 - 1, rng:RandomFloat() * 2 - 1)
+    local randomDirection = GetRandomDirection(rng)
+    local randomDirection2 = GetRandomDirection(rng)
 
     ---@type Vector
     ---@diagnostic disable-next-line: assign-type-mismatch
@@ -196,9 +228,14 @@ local function ShootWhiteVomitProjectiles(spewer)
     ---@diagnostic disable-next-line: assign-type-mismatch
     local spawningPos = spewer.Position + Vector(0, 10) + randomDirection2 * 20
 
-    local velocity = (targetPosition - spawningPos):Normalized() * 8
+    local velocityAmount = spewer.Position:Distance(closestPlayer.Position) / 20
+    local velocity = (targetPosition - spawningPos):Normalized() * velocityAmount
     spewer:FireProjectiles(spawningPos, velocity, 0, params)
 
+    if rng:RandomInt(100) < Constants.WHITE_ATTACK_SPIDER_CHANCE then
+        local spiderTargetPos = targetPosition - (targetPosition - spawningPos) / 2
+        EntityNPC.ThrowSpider(spawningPos, spewer, spiderTargetPos, false, 0)
+    end
 end
 
 
@@ -247,19 +284,19 @@ end
 local function OnSpewerPill(spewer, spewerSprite, spewerData)
     if spewerSprite:IsFinished("WhitePill") then
         spewerSprite:Load("gfx/whitespewer.anm2", true)
-        spewerSprite:Play("Appear")
+        spewerSprite:Play("Transform")
         spewerData.SpewerForm = Constants.SPEWER_BOSS_FORMS.WHITE_PILLED
     elseif spewerSprite:IsFinished("RedPill") then
         spewerSprite:Load("gfx/redspewer.anm2", true)
-        spewerSprite:Play("Appear")
+        spewerSprite:Play("Transform")
         spewerData.SpewerForm = Constants.SPEWER_BOSS_FORMS.RED_PILLED
     elseif spewerSprite:IsFinished("GreenPill") then
         spewerSprite:Load("gfx/spewer.anm2", true)
-        spewerSprite:Play("Appear")
+        spewerSprite:Play("Transform")
         spewerData.SpewerForm = Constants.SPEWER_BOSS_FORMS.DEFAULT
     end
 
-    if spewerSprite:IsFinished("Appear") then
+    if spewerSprite:IsFinished("Transform") then
         spewerSprite:Play("Idle")
         spewer.State = NpcState.STATE_IDLE
         spewer.StateFrame = Constants.SPEWER_BOSS_JUMP_COUNTDOWN
@@ -319,12 +356,18 @@ function SpewerBehaviour:OnProjectileRemoved(projectile)
 
         leperProjectile.Color = Color(1, 1, 1, 1, 0.3, 0, 0)
         leperProjectile:AddProjectileFlags(ProjectileFlags.RED_CREEP)
+    elseif projectile:GetData().IsRandomGreenSpewerProjectile then
+        local greenCreep = Isaac.Spawn(EntityType.ENTITY_EFFECT, EffectVariant.CREEP_GREEN, 0, projectile.Position, Vector.Zero, nil)
+        greenCreep = greenCreep:ToEffect()
+
+        greenCreep.Timeout = math.ceil(greenCreep.Timeout / 1.5)
+        greenCreep.SpriteScale = Vector.One * 2.5
     end
 
     if projectile.SpawnerType ~= Constants.SPEWER_BOSS_TYPE then return end
 
     local data = projectile:GetData()
-    if data.SpewerForm == Constants.SPEWER_BOSS_FORMS.DEFAULT then
+    if data.SpewerForm == Constants.SPEWER_BOSS_FORMS.DEFAULT and not data.IsRandomGreenSpewerProjectile then
         table.insert(rainingProjectilesPositions, {center = projectile.Position, frames = Constants.RAINING_PROJECTILES_FRAMES, rng = projectile:GetDropRNG()})
     elseif data.SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
         for x = -1, 1, 1 do
@@ -361,7 +404,7 @@ function SpewerBehaviour:OnFrameUpdate()
         if game:GetFrameCount() % 4 == 0 then
             ---@type RNG
             local rng = rainingProjectilePosition.rng
-            local randomDirection = Vector(rng:RandomFloat() * 2 - 1, rng:RandomFloat() * 2 - 1)
+            local randomDirection = GetRandomDirection(rng)
 
             ---@type Vector
             ---@diagnostic disable-next-line: assign-type-mismatch
@@ -392,6 +435,15 @@ function SpewerBehaviour:OnNewRoom()
 end
 
 
+---@param tookDamage Entity
+---@param source EntityRef
+function SpewerBehaviour:OnEntityDamage(tookDamage, _, _, source)
+    if source.Type == tookDamage.Type or source.SpawnerType == tookDamage.Type then
+        return false
+    end
+end
+
+
 function SpewerBehaviour:AddCallbacks(constants)
     Constants = constants
 
@@ -404,6 +456,7 @@ function SpewerBehaviour:AddCallbacks(constants)
 
     Constants.MOD:AddCallback(ModCallbacks.MC_POST_UPDATE, SpewerBehaviour.OnFrameUpdate)
     Constants.MOD:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, SpewerBehaviour.OnNewRoom)
+    Constants.MOD:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, SpewerBehaviour.OnEntityDamage, Constants.SPEWER_BOSS_TYPE)
 end
 
 return SpewerBehaviour
