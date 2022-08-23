@@ -96,7 +96,6 @@ local function OnSpewerIdle(spewer, spewerSprite, spewerData)
 
         spewer.V2 = (closestPlayer.Position - spewer.Position):Normalized()
         spewer.State = NpcState.STATE_MOVE
-        spewer.EntityCollisionClass = EntityCollisionClass.ENTCOLL_NONE
         spewerSprite:Play("Jump", true)
     elseif spewer.I1 == 3 then
         local rng = spewer:GetDropRNG()
@@ -120,6 +119,15 @@ end
 ---@param spewerSprite Sprite
 ---@param spewerData table
 local function OnSpewerJump(spewer, spewerSprite, spewerData)
+    if spewerSprite:IsEventTriggered("Jump") then
+        spewer.EntityCollisionClass = EntityCollisionClass.ENTCOLL_NONE
+    end
+
+    if spewerSprite:IsEventTriggered("Land") then
+        spewer.EntityCollisionClass = EntityCollisionClass.ENTCOLL_ALL
+        game:ShakeScreen(5)
+    end
+
     if spewerSprite:IsFinished("Jump") then
         spewerSprite:Play("JumpLoop", true)
     end
@@ -129,7 +137,6 @@ local function OnSpewerJump(spewer, spewerSprite, spewerData)
     end
 
     if spewerSprite:IsFinished("JumpDown") then
-        spewer.EntityCollisionClass = EntityCollisionClass.ENTCOLL_ALL
         spewerSprite:Play("JumpLand")
     end
 
@@ -158,9 +165,9 @@ local function ShootGreenProjectile(spewer)
 
     local params = ProjectileParams()
 
-    params.BulletFlags = ProjectileFlags.ACID_GREEN | ProjectileFlags.EXPLODE
-    params.Color = Color(0.5, 0.9, 0.4)
-    params.Variant = ProjectileVariant.PROJECTILE_TEAR
+    params.BulletFlags = ProjectileFlags.EXPLODE
+    --params.Color = Color(0.5, 0.9, 0.4)
+    --params.Variant = ProjectileVariant.PROJECTILE_TEAR
     --For lobbed shots
     params.FallingAccelModifier = 0.7
     params.FallingSpeedModifier = -10
@@ -173,11 +180,10 @@ local function ShootGreenProjectile(spewer)
     for _ = 1, 2, 1 do
         local randomDirection = GetRandomDirection(spewer:GetDropRNG())
 
-        local randomProjectile = Isaac.Spawn(EntityType.ENTITY_PROJECTILE, ProjectileVariant.PROJECTILE_TEAR, 0, spewer.Position, randomDirection * 8, spewer)
+        local randomProjectile = Isaac.Spawn(EntityType.ENTITY_PROJECTILE, ProjectileVariant.PROJECTILE_NORMAL, 0, spewer.Position, randomDirection * 8, spewer)
         randomProjectile = randomProjectile:ToProjectile()
 
         randomProjectile:AddProjectileFlags(ProjectileFlags.EXPLODE)
-        randomProjectile.Color = Color(0.5, 0.9, 0.4)
         randomProjectile.FallingAccel = 0.7
         randomProjectile.FallingSpeed = -10
 
@@ -233,8 +239,8 @@ local function ShootWhiteVomitProjectiles(spewer)
     spewer:FireProjectiles(spawningPos, velocity, 0, params)
 
     if rng:RandomInt(100) < Constants.WHITE_ATTACK_SPIDER_CHANCE then
-        local spiderTargetPos = targetPosition - (targetPosition - spawningPos) / 2
-        EntityNPC.ThrowSpider(spawningPos, spewer, spiderTargetPos, false, 0)
+        local spider = Isaac.Spawn(EntityType.ENTITY_SWARM_SPIDER, 0, 0, spawningPos, Vector.Zero, spewer)
+        spider:ClearEntityFlags(EntityFlag.FLAG_APPEAR)
     end
 end
 
@@ -341,6 +347,14 @@ function SpewerBehaviour:OnProjectileUpdate(projectile)
     if projectile:GetData().SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
         projectile.FallingAccel = -0.1
         projectile.FallingSpeed = 0
+    elseif projectile:GetData().SpewerForm == Constants.SPEWER_BOSS_FORMS.DEFAULT then
+        local color = Color(1, 1, 1)
+        color:SetColorize(0, 1, 0, 1)
+        projectile.Color = color
+    elseif projectile:GetData().IsGreenSpewerFallingProjectile then
+        local color = Color(1, 1, 1)
+        color:SetColorize(0, 1, 0, 1)
+        projectile.Color = color
     end
 end
 
@@ -367,8 +381,14 @@ function SpewerBehaviour:OnProjectileRemoved(projectile)
     if projectile.SpawnerType ~= Constants.SPEWER_BOSS_TYPE then return end
 
     local data = projectile:GetData()
-    if data.SpewerForm == Constants.SPEWER_BOSS_FORMS.DEFAULT and not data.IsRandomGreenSpewerProjectile then
-        table.insert(rainingProjectilesPositions, {center = projectile.Position, frames = Constants.RAINING_PROJECTILES_FRAMES, rng = projectile:GetDropRNG()})
+    if data.SpewerForm == Constants.SPEWER_BOSS_FORMS.DEFAULT then
+        local bloodSplat = Isaac.Spawn(EntityType.ENTITY_EFFECT, EffectVariant.BLOOD_SPLAT, 0, projectile.Position, Vector.Zero, projectile)
+        local color = Color(1, 1, 0.7)
+        color:SetColorize(0, 1, 0, 1)
+        bloodSplat.Color = color
+        if not data.IsRandomGreenSpewerProjectile then
+            table.insert(rainingProjectilesPositions, {center = projectile.Position, frames = Constants.RAINING_PROJECTILES_FRAMES, rng = projectile:GetDropRNG()})
+        end
     elseif data.SpewerForm == Constants.SPEWER_BOSS_FORMS.RED_PILLED then
         for x = -1, 1, 1 do
             for y = -1, 1, 1 do
@@ -417,6 +437,17 @@ function SpewerBehaviour:OnFrameUpdate()
 
             projectile:AddHeight(-600)
             projectile:AddFallingAccel(3)
+
+            local color = Color(1, 1, 1)
+            if rng:RandomInt(2) == 0 then
+                --Dark Green
+                color:SetColorize(0, 1, 0, 1)
+            else
+                --Light Green
+                color:SetColorize(0, 3, 0, 0.6)
+            end
+
+            projectile.Color = color
         end
 
         rainingProjectilePosition.frames = rainingProjectilePosition.frames - 1
